@@ -41,6 +41,21 @@ describe('createRoutine', () => {
     expect(createRoutine(base(), { name: 'C', exercises: [{ exercise: 'treadmill', reps: 10 }] }).problems[0].problem).toMatch(/minutes/)
     expect(createRoutine(base(), { name: 'C', exercises: [{ exercise: 'treadmill' }] }).routine.ex[0]).toMatchObject({ id: '3666', min: 20 })
   })
+  test('cardio takes minutes, speed and incline as the target it opens at', () => {
+    const r = createRoutine(base(), { name: 'C', exercises: [{ exercise: 'treadmill', minutes: 30, speed: 10, incline: 5 }] })
+    expect(r.problems).toBeUndefined()
+    expect(r.routine.ex[0]).toMatchObject({ id: '3666', min: 30, speed: 10, incline: 5 })
+  })
+  test('cardio speed follows speed_unit, stored in km/h', () => {
+    const r = createRoutine(base(), { name: 'C', exercises: [{ exercise: 'treadmill', speed: 6 }], speed_unit: 'mph' })
+    expect(r.problems).toBeUndefined()
+    expect(r.routine.ex[0].speed).toBeCloseTo(9.66, 2)
+  })
+  test('incline is refused on a bike', () => {
+    const r = createRoutine(base(), { name: 'C', exercises: [{ exercise: '2138', incline: 5 }] })
+    expect(r.routine).toBeUndefined()
+    expect(r.problems[0].problem).toMatch(/no incline/)
+  })
 })
 
 describe('updateRoutine', () => {

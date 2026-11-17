@@ -12,10 +12,12 @@
 import { resolveExercise } from './log-workout.js'
 import { pickedExerciseConfig, cleanupSg } from './history.js'
 import { deleteRoutine } from './routines.js'
-import { isCardio } from './exercises.js'
+import { isCardio, EXIDX } from './exercises.js'
+import { fromSpeed, speedUnitOf } from './speed.js'
+import { clampIncline, inclineFits } from './incline.js'
 
 const LB_TO_KG = 0.45359237
-export const ROUTINE_LIMITS = { maxExercises: 40, maxSets: 20, maxReps: 100, maxSec: 3600, maxRestSec: 900, maxKg: 2000, maxName: 80, maxNote: 280 }
+export const ROUTINE_LIMITS = { maxExercises: 40, maxSets: 20, maxReps: 100, maxSec: 3600, maxRestSec: 900, maxKg: 2000, maxName: 80, maxNote: 280, maxCardioMin: 360, maxKmh: 60, maxIncline: 40 }
 // JS getDay() order, the state's own (S.week is keyed 0 Sunday … 6 Saturday).
 export const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
@@ -36,7 +38,7 @@ export function weekdaysOf(list) {
 
 // One described exercise as a slot. `base` is the slot it edits (its settings stay), else a fresh
 // pick. Weight is in `unit` and stored in the profile's.
-function slotOf(S, ex, base, unit, at, problems) {
+function slotOf(S, ex, base, unit, speedUnit, at, problems) {
   const want = ex?.exercise
   let hit
   if (base && (want == null || want === base.id)) hit = { id: base.id }
@@ -50,6 +52,34 @@ function slotOf(S, ex, base, unit, at, problems) {
   const slot = base && base.id === hit.id ? { ...base } : { id: hit.id, ...pickedExerciseConfig(hit.id, timed ? 'time' : undefined, S) }
   if (timed && slot.mode !== 'time') { slot.mode = 'time'; delete slot.reps; delete slot.repsMin }
   if (ex?.reps != null && slot.mode === 'time') { slot.mode = 'reps'; delete slot.sec }
+  // A cardio target: the minutes and speed (or incline) the routine opens the exercise at — the
+  // same { min, speed, incline } the editor's own cardio config holds, lib/history.js `cfg`. Only
+  // given fields change; an edit that mentions none of them keeps whatever the slot already had.
+  if (isCardio(hit.id)) {
+    if (ex?.minutes != null) {
+      const m = num(ex.minutes)
+      if (!Number.isInteger(m) || m < 1 || m > ROUTINE_LIMITS.maxCardioMin) problems.push({ field: `${at}.minutes`, problem: `whole minutes, 1–${ROUTINE_LIMITS.maxCardioMin}` })
+      else slot.min = m
+    }
+    if (ex?.speed != null) {
+      const v = num(ex.speed)
+      if (v == null || v < 0) problems.push({ field: `${at}.speed`, problem: 'must be 0 or more' })
+      else {
+        const kmh = fromSpeed(v, speedUnit === 'mph' ? 'mph' : 'kmh')
+        if (kmh > ROUTINE_LIMITS.maxKmh) problems.push({ field: `${at}.speed`, problem: `over ${ROUTINE_LIMITS.maxKmh} km/h: check speed_unit` })
+        else slot.speed = kmh
+      }
+    }
+    if (ex?.incline != null) {
+      const own = (S.customEx || []).find(c => c?.id === hit.id)
+      if (!inclineFits(own || EXIDX[hit.id])) problems.push({ field: `${at}.incline`, problem: 'this exercise has no incline (a bike or a rower)' })
+      else {
+        const g = clampIncline(ex.incline)
+        if (g == null || num(ex.incline) < 0 || num(ex.incline) > ROUTINE_LIMITS.maxIncline) problems.push({ field: `${at}.incline`, problem: `percent, 0–${ROUTINE_LIMITS.maxIncline}` })
+        else if (g > 0) slot.incline = g; else delete slot.incline
+      }
+    }
+  }
   const check = (k, v, lo, hi) => {
     if (v == null) return undefined
     const n = num(v)
@@ -79,7 +109,7 @@ function slotOf(S, ex, base, unit, at, problems) {
 
 // The slots a list of described exercises stands for. With `old` (an edit), each exercise named
 // again takes the next unused slot of that exercise, so repeated slots keep their own settings.
-function slotsOf(S, list, old, unit, field, problems) {
+function slotsOf(S, list, old, unit, speedUnit, field, problems) {
   if (!Array.isArray(list) || !list.length) { problems.push({ field, problem: 'at least one exercise' }); return [] }
   if (list.length > ROUTINE_LIMITS.maxExercises) { problems.push({ field, problem: `at most ${ROUTINE_LIMITS.maxExercises}` }); return [] }
   const used = new Set()
@@ -91,7 +121,7 @@ function slotsOf(S, list, old, unit, field, problems) {
       const j = old.findIndex((s, k) => !used.has(k) && s.id === id)
       if (j >= 0) { used.add(j); base = old[j] }
     }
-    return slotOf(S, ex, base, unit, `${field}[${i}]`, problems)
+    return slotOf(S, ex, base, unit, speedUnit, `${field}[${i}]`, problems)
   }).filter(Boolean)
 }
 
@@ -109,7 +139,8 @@ function placeOnWeekdays(S, id, days) {
 
 /**
  * A new routine into `S` (mutated). `input`: { name, exercises: [{ exercise, sets?, reps? | seconds?,
- * weight?, rest_sec?, note? }], weekdays?, unit? }. → { routine } or { problems } (S untouched).
+ * weight?, minutes?, speed?, incline?, rest_sec?, note? }], weekdays?, unit?, speed_unit? }.
+ * → { routine } or { problems } (S untouched).
  */
 export function createRoutine(S, input, { id } = {}) {
   const problems = []
@@ -119,7 +150,8 @@ export function createRoutine(S, input, { id } = {}) {
     problems.push({ field: 'name', problem: 'a routine with this name exists already; update it, or pick another name' })
   }
   const unit = input?.unit === 'lb' || input?.unit === 'kg' ? input.unit : S.unit === 'lb' ? 'lb' : 'kg'
-  const ex = slotsOf(S, input?.exercises, null, unit, 'exercises', problems)
+  const speedUnit = input?.speed_unit === 'mph' || input?.speed_unit === 'kmh' ? input.speed_unit : speedUnitOf(S)
+  const ex = slotsOf(S, input?.exercises, null, unit, speedUnit, 'exercises', problems)
   const days = input?.weekdays == null ? { days: null } : weekdaysOf(input.weekdays)
   if (days.problem) problems.push({ field: 'weekdays', problem: days.problem })
   if (problems.length) return { problems }
@@ -147,9 +179,10 @@ export function updateRoutine(S, routineId, patch) {
     else next.name = name
   }
   const unit = patch?.unit === 'lb' || patch?.unit === 'kg' ? patch.unit : S.unit === 'lb' ? 'lb' : 'kg'
+  const speedUnit = patch?.speed_unit === 'mph' || patch?.speed_unit === 'kmh' ? patch.speed_unit : speedUnitOf(S)
   const oldEx = Array.isArray(old.ex) ? old.ex : []
-  if (patch?.exercises != null) next.ex = slotsOf(S, patch.exercises, oldEx, unit, 'exercises', problems)
-  if (patch?.add_exercises != null) next.ex = [...(next.ex || oldEx), ...slotsOf(S, patch.add_exercises, null, unit, 'add_exercises', problems)]
+  if (patch?.exercises != null) next.ex = slotsOf(S, patch.exercises, oldEx, unit, speedUnit, 'exercises', problems)
+  if (patch?.add_exercises != null) next.ex = [...(next.ex || oldEx), ...slotsOf(S, patch.add_exercises, null, unit, speedUnit, 'add_exercises', problems)]
   if ((next.ex || []).length > ROUTINE_LIMITS.maxExercises) problems.push({ field: 'exercises', problem: `at most ${ROUTINE_LIMITS.maxExercises}` })
   const days = patch?.weekdays == null ? { days: null } : weekdaysOf(patch.weekdays)
   if (days.problem) problems.push({ field: 'weekdays', problem: days.problem })
