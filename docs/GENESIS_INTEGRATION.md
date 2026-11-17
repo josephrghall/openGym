@@ -62,3 +62,10 @@ After fork PR #1 was merged and the API was rebuilt, the owner reported that Cha
 Cross-system chronology and open acceptance criteria:
 - https://github.com/josephrghall/project_genesis/blob/docs/genesis-body-vertical-slice/docs/03-development/GENESIS-BODY-OPENGYM-PROTOTYPE-RECORD.md (architecture PR review branch until merged)
 - https://github.com/josephrghall/project_genesis/issues/90
+
+
+## MCP timezone correctness on the VPS — November 16, 2026 Pacific
+
+The OpenGym MCP tool get_week_plan initially used the VPS container default timezone (UTC) to determine today. During Monday evening in California, it incorrectly returned Tuesday. The optional MCP-only Compose override in the VPS's untracked compose.override.yml now sets TZ=America/Los_Angeles. Recreating only the MCP container corrected its get_week_plan.today from 2026-11-17 to 2026-11-16, with Monday Zone 2 + Mobility as the schedule. The web and API containers and user profile data were untouched; all three containers healthy. The previous override is retained locally as /srv/opengym/compose.override.before-pacific-mcp.yml. This VPS setting is a pragmatic single-user fix, not a generalized per-profile timezone or traveler-timezone solution. Any multi-user expansion would need explicit timezone ownership, not one globally assumed zone.
+
+The five existing OpenGym routine IDs are linked to their weekdays in the private vault's existing Phase 1 — Fighter Foundation record (vault commit eb43804). The live ChatGPT MCP read returned source revision 40. Provider data remains exclusively in OpenGym; the vault relationship is not a live workout-data mirror. Next is native Android pairing and a real two-device edit/read test. Engineering issue: https://github.com/josephrghall/project_genesis/issues/90 .
