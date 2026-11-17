@@ -42,3 +42,12 @@ Verified from HTTPS: browser app 200, app health 200, OAuth metadata 200, unauth
 To authorize an agent, use OpenGym Settings → Use your subscription (OAuth connector) or create one agent-specific API token in Settings → Integrations → API tokens; never share raw credentials in GitHub or the vault. Restrict scope to the required domain and write operation. Use distinct, revocable scopes per agent; keep deterministic automation and UI access through the original HTTP API as appropriate.
 
 No device health permissions, mobile-pairing, or agent write operations have been tested yet.
+
+
+## ChatGPT OAuth compatibility fix — November 16, 2026
+
+Claude's OAuth MCP connection worked; ChatGPT's failed at /gym/api/oauth/authorize with HTTP 400. Reproduced from ChatGPT's published CIMD metadata (https://chatgpt.com/oauth/client.json): legacy token_endpoint_auth_method prefers private_key_jwt, but plural token_endpoint_auth_methods_supported includes the public none method supported by OpenGym. Earlier api/oauth.js validated the singular preference only.
+
+Fixed in fork PR #1 (https://github.com/josephrghall/openGym/pull/1): use plural supported-methods when present; accept only clients including none; preserve rejection of clients offering only unsupported private methods. Existing PKCE, OAuth consent, scoped token requirements and login remain unchanged.
+
+After API-only source build/deploy, all 23 targeted unit/server OAuth tests passed. A synthetic ChatGPT published-identity authorize request now returns HTTP 302 to OpenGym consent (formerly HTTP 400). Web/API/MCP containers are healthy; unauthorized data and MCP tool access still return HTTP 401. The previous API image is preserved locally as genesis-opengym-api:pre-chatgpt-cimd-20261116 for rollback. The existing Claude authorization was not removed or edited. Final ChatGPT user consent, token exchange, and tool read still require a retry from ChatGPT.
