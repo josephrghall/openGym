@@ -193,6 +193,18 @@ test('a resource that is not this MCP address goes back as invalid_target', () =
   assert.match(bad.redirect, /iss=https/);
 });
 
+test('CIMD: ChatGPT plural methods can negotiate the supported public-client method', () => {
+  const id = 'https://chatgpt.com/oauth/client.json';
+  const base = { client_id: id, redirect_uris: ['https://chatgpt.com/connector_platform_oauth_redirect'] };
+  // ChatGPT's public metadata lists both methods, but the legacy preference is private_key_jwt.
+  const chatgpt = { ...base, token_endpoint_auth_method: 'private_key_jwt', token_endpoint_auth_methods_supported: ['none', 'private_key_jwt'] };
+  assert.equal(oauth.cimdClient(id, chatgpt).ok, true);
+  assert.equal(oauth.cimdClient(id, { ...chatgpt, token_endpoint_auth_methods_supported: ['private_key_jwt'] }).ok, false);
+  assert.equal(oauth.cimdClient(id, { ...chatgpt, token_endpoint_auth_methods_supported: [] }).ok, false);
+  assert.equal(oauth.cimdClient(id, { ...base, token_endpoint_auth_method: 'private_key_jwt' }).ok, false, 'legacy-only private-key client is not supported');
+  assert.equal(oauth.cimdClient(id, { ...base, token_endpoint_auth_method: 'none' }).ok, true, 'legacy public-client compatibility retained');
+});
+
 test('CIMD: the document must name itself, list usable redirects and be a public client', async () => {
   oauth._clearCimdCache();
   const URLID = 'https://claude.ai/oauth/claude-code-client-metadata';
