@@ -13,9 +13,9 @@ This repository is a fork of https://github.com/DuarteSantos8/openGym. Genesis r
 
 Source checkout: /srv/opengym/app on VPS srv1969440. Git origin is josephrghall/openGym and upstream is DuarteSantos8/openGym. The normal Docker Compose source builds produce OpenGym's API and web containers.
 
-The VPS has an untracked, local compose.override.yml binding the web container to 127.0.0.1:5211, with private .env configuration for BASE_PATH=/gym, ORIGIN=https://srv1969440.hstgr.cloud and RP_ID=srv1969440.hstgr.cloud. Its existing nginx server forwards HTTPS /gym/ to that local container, passing through the path prefix. During first-account bootstrap nginx also requires Basic authentication. The credentials live outside Git under /root/.config/genesis-opengym/access.txt.
+The VPS has an untracked, local compose.override.yml binding the web container to 127.0.0.1:5211, with private .env configuration for BASE_PATH=/gym, ORIGIN=https://srv1969440.hstgr.cloud and RP_ID=srv1969440.hstgr.cloud. Its existing nginx server forwards HTTPS /gym/ to that local container, passing through the path prefix. The temporary additional nginx Basic authentication was removed when enabling native pairing and MCP OAuth; OpenGym now requires only its own session, passkey/password, OAuth consent or scoped API-token checks.
 
-The original web UI: https://srv1969440.hstgr.cloud/gym/. Both OpenGym login and the temporary external login gate must pass. The existing Genesis command-center links to this page; it does not embed or copy the application.
+The original web UI: https://srv1969440.hstgr.cloud/gym/. OpenGym authentication remains required; there is no extra nginx login. The existing Genesis command-center links to this page; it does not embed or copy the application.
 
 No wearable or nutrition syncing has been configured. Android browser/PWA uses the same HTTPS page. Native Android pairing and Health Connect require separate testing and permissions; the additional Basic-auth proxy may need adjustment for the native app.
 
@@ -30,3 +30,15 @@ The app source is GNU AGPLv3; preserve LICENSE and NOTICE, and provide source as
 ## Future Genesis adapter
 
 Expose an explicitly scoped adapter for OpenGym plans, workout sessions, and exercise performance (provider IDs, timestamps, provenance, corrections). Link domain identities to Genesis later rather than copying OpenGym's entire canonical store. Apple Health/HealthKit, Android Health Connect, and nutrition are independent source integrations, not preexisting OpenGym capabilities.
+
+## Active MCP connection (November 16, 2026)
+
+The optional OpenGym MCP service is now running, built from the fork source, under the standard Compose profile `mcp`; `.env` contains `MCP=on` and `COMPOSE_PROFILES=mcp`. The existing `/gym/` proxy already forwards `/gym/mcp` to the built-in OpenGym proxy; no extra MCP service port is published. OAuth metadata routes under `/gym/.well-known/` and the exact RFC 8414 paths `/.well-known/oauth-authorization-server/gym` and `/.well-known/oauth-protected-resource/gym/mcp` are proxied by existing host nginx.
+
+Connection URL: `https://srv1969440.hstgr.cloud/gym/mcp`.
+
+Verified from HTTPS: browser app 200, app health 200, OAuth metadata 200, unauthorized personal data 401, unauthenticated MCP tool request 401. Web/API/MCP Docker containers healthy. **No account consent or scoped token has been granted to any agent yet**, and no training data was fetched or changed.
+
+To authorize an agent, use OpenGym Settings → Use your subscription (OAuth connector) or create one agent-specific API token in Settings → Integrations → API tokens; never share raw credentials in GitHub or the vault. Restrict scope to the required domain and write operation. Use distinct, revocable scopes per agent; keep deterministic automation and UI access through the original HTTP API as appropriate.
+
+No device health permissions, mobile-pairing, or agent write operations have been tested yet.
