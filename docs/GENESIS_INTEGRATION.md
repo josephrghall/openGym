@@ -51,3 +51,14 @@ Claude's OAuth MCP connection worked; ChatGPT's failed at /gym/api/oauth/authori
 Fixed in fork PR #1 (https://github.com/josephrghall/openGym/pull/1): use plural supported-methods when present; accept only clients including none; preserve rejection of clients offering only unsupported private methods. Existing PKCE, OAuth consent, scoped token requirements and login remain unchanged.
 
 After API-only source build/deploy, all 23 targeted unit/server OAuth tests passed. A synthetic ChatGPT published-identity authorize request now returns HTTP 302 to OpenGym consent (formerly HTTP 400). Web/API/MCP containers are healthy; unauthorized data and MCP tool access still return HTTP 401. The previous API image is preserved locally as genesis-opengym-api:pre-chatgpt-cimd-20261116 for rollback. The existing Claude authorization was not removed or edited. Final ChatGPT user consent, token exchange, and tool read still require a retry from ChatGPT.
+
+
+## Connector field verification after the compatibility fix — November 16, 2026 Pacific
+
+After fork PR #1 was merged and the API was rebuilt, the owner reported that ChatGPT's custom MCP connector connected successfully. Public HTTPS request status logs showed the ChatGPT MCP client completing protocol requests with HTTP 200/202 on November 17 UTC. Claude OAuth/MCP requests had already been verified successful. This supersedes the previous checkpoint saying ChatGPT authorization alone was tested. No secret token, account identifier, personal measurements, or raw access logs are recorded here.
+
+**Verified scope:** OAuth authorization and MCP protocol exchange. A separate private vault investigation found no persisted per-profile saved training state after initial account login; a real user-approved workout, routine or body-weight edit still needs to sync before an agent can read meaningful workout records. Do not fabricate sample workouts in the owner's production profile.
+
+Cross-system chronology and open acceptance criteria:
+- https://github.com/josephrghall/project_genesis/blob/docs/genesis-body-vertical-slice/docs/03-development/GENESIS-BODY-OPENGYM-PROTOTYPE-RECORD.md (architecture PR review branch until merged)
+- https://github.com/josephrghall/project_genesis/issues/90
