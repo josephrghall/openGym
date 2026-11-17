@@ -81,6 +81,9 @@ const exerciseSchema = z.object({
   reps: z.number().int().min(1).max(ROUTINE_LIMITS.maxReps).optional().describe('Reps per set, for a rep exercise.'),
   seconds: z.number().int().min(1).max(ROUTINE_LIMITS.maxSec).optional().describe('Seconds per set, for a hold (plank). Not with reps.'),
   weight: z.number().min(0).optional().describe('Planned load in `unit`; omit or 0 to start from what the user lifted last time.'),
+  minutes: z.number().int().min(1).max(ROUTINE_LIMITS.maxCardioMin).optional().describe('Cardio only (treadmill, bike, rower…): the minutes the routine opens this exercise at. Not with reps or seconds.'),
+  speed: z.number().min(0).optional().describe('Cardio only: the speed the routine opens this exercise at, in speed_unit.'),
+  incline: z.number().min(0).max(ROUTINE_LIMITS.maxIncline).optional().describe('Cardio on foot (treadmill, stairs): grade in percent. Refused on a bike or rower.'),
   rest_sec: z.number().int().min(0).max(ROUTINE_LIMITS.maxRestSec).optional().describe('Rest after each set, seconds. 0 or omitted: the global rest timer.'),
   note: z.string().max(ROUTINE_LIMITS.maxNote).optional().describe('A note shown with this exercise in the workout.'),
 })
@@ -92,6 +95,7 @@ export const createRoutineTool = {
     'Create a routine in the user\'s openGym plan (it syncs to all their devices), e.g. "squat 5 × 5 at 100 kg, plank 3 × 60 s, Tuesdays and Fridays".',
     'Exercises are matched against the library like log_workout: when a name matches several or none, nothing is saved and `problems` lists candidates to put to the user.',
     'Each exercise starts the way picking it in the app starts it; only what you pass is set on top. `weekdays` puts it on those days of the weekly plan, next to whatever is planned there already.',
+    'A cardio exercise (treadmill, bike, rower) takes minutes plus speed or an incline instead of reps or seconds — the same target the routine opens it at in the app.',
     'Call with dry_run: true first when you interpreted anything, show the preview, and save once the user agrees.',
   ].join(' '),
   schema: {
@@ -99,6 +103,7 @@ export const createRoutineTool = {
     exercises: z.array(exerciseSchema).min(1).max(ROUTINE_LIMITS.maxExercises),
     weekdays: weekdaysSchema.optional().describe('The weekdays to plan it on.'),
     unit: z.enum(['kg', 'lb']).optional().describe('The unit weights are given in; defaults to the profile\'s.'),
+    speed_unit: z.enum(['kmh', 'mph']).optional().describe('The unit cardio speeds are given in; defaults to the profile\'s.'),
     dry_run: z.boolean().optional(),
   },
   handler: async (p, { env = process.env, fetchImpl } = {}) => writePlan({
@@ -122,6 +127,7 @@ export const updateRoutineTool = {
     add_exercises: z.array(exerciseSchema).min(1).max(ROUTINE_LIMITS.maxExercises).optional(),
     weekdays: weekdaysSchema.optional(),
     unit: z.enum(['kg', 'lb']).optional(),
+    speed_unit: z.enum(['kmh', 'mph']).optional().describe('The unit cardio speeds are given in; defaults to the profile\'s.'),
     expected_revision: z.number().int().min(0).optional(),
     dry_run: z.boolean().optional(),
   },
